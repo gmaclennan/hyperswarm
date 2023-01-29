@@ -49,6 +49,10 @@ module.exports = class Hyperswarm extends EventEmitter {
     this.explicitPeers = new Set()
     this.listening = null
 
+    this._opts = opts
+    this._root = opts._root
+    if (this._root) this._root.once('predestroy', () => this.destroy())
+
     this._discovery = new Map()
     this._timer = new RetryTimer(this._requeue.bind(this), {
       backoffs: opts.backoffs,
@@ -66,7 +70,8 @@ module.exports = class Hyperswarm extends EventEmitter {
     this._serverConnections = 0
     this._firewall = firewall
 
-    this.dht.on('network-change', this._handleNetworkChange.bind(this))
+    this._handleNetworkChange = this._handleNetworkChange.bind(this)
+    this.dht.on('network-change', this._handleNetworkChange)
   }
 
   _enqueue (peerInfo) {
@@ -396,9 +401,23 @@ module.exports = class Hyperswarm extends EventEmitter {
     return cleared
   }
 
+  session (opts = {}) {
+    return new Hyperswarm({
+      ...this._opts,
+      seed: undefined,
+      keyPair: undefined,
+      ...opts,
+      dht: this.dht,
+      _root: this._root || this
+    })
+  }
+
   async destroy () {
     if (this.destroyed) return
     this.destroyed = true
+    this.emit('predestroy')
+
+    this.dht.off('network-change', this._handleNetworkChange)
 
     this._timer.destroy()
 
@@ -415,7 +434,9 @@ module.exports = class Hyperswarm extends EventEmitter {
       conn.destroy()
     }
 
-    await this.dht.destroy()
+    if (!this._root) await this.dht.destroy()
+
+    this.emit('close')
   }
 
   topics () {
