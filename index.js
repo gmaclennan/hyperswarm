@@ -40,6 +40,7 @@ module.exports = class Hyperswarm extends EventEmitter {
     }, this._handleServerConnection.bind(this))
 
     this.destroyed = false
+    this._destroying = null
     this.maxPeers = maxPeers
     this.maxClientConnections = maxClientConnections
     this.maxServerConnections = maxServerConnections
@@ -418,6 +419,12 @@ module.exports = class Hyperswarm extends EventEmitter {
   }
 
   async destroy () {
+    if (this._destroying) return this._destroying
+    this._destroying = this._destroy()
+    return this._destroying
+  }
+
+  async _destroy () {
     if (this.destroyed) return
     this.destroyed = true
 
